@@ -1,0 +1,123 @@
+{
+  "cluster": "prod-use1-eks-02",
+  "namespace": "prod",
+  "edge_semantics": "source calls target (source depends on target); failures propagate target -> source",
+  "services": [
+    {
+      "id": "api-gateway",
+      "tier": "edge",
+      "runtime": "go1.22",
+      "replicas": 6,
+      "port": 8443,
+      "criticality": "tier-0",
+      "owner": "team-edge"
+    },
+    {
+      "id": "auth-service",
+      "tier": "core",
+      "runtime": "java17/spring-boot-3.2",
+      "replicas": 8,
+      "port": 8080,
+      "criticality": "tier-0",
+      "owner": "team-identity"
+    },
+    {
+      "id": "token-refresh",
+      "tier": "core",
+      "runtime": "node20",
+      "replicas": 4,
+      "port": 9090,
+      "criticality": "tier-1",
+      "owner": "team-identity"
+    },
+    {
+      "id": "user-db",
+      "tier": "data",
+      "runtime": "postgresql-15.7",
+      "replicas": 2,
+      "port": 5432,
+      "criticality": "tier-0",
+      "owner": "team-dbre"
+    },
+    {
+      "id": "payment-service",
+      "tier": "core",
+      "runtime": "python3.11/fastapi",
+      "replicas": 6,
+      "port": 8000,
+      "criticality": "tier-0",
+      "owner": "team-payments"
+    },
+    {
+      "id": "notification-service",
+      "tier": "support",
+      "runtime": "go1.22",
+      "replicas": 3,
+      "port": 8080,
+      "criticality": "tier-2",
+      "owner": "team-comms"
+    }
+  ],
+  "edges": [
+    {
+      "source": "api-gateway",
+      "target": "auth-service",
+      "protocol": "http",
+      "mode": "sync"
+    },
+    {
+      "source": "api-gateway",
+      "target": "payment-service",
+      "protocol": "http",
+      "mode": "sync"
+    },
+    {
+      "source": "api-gateway",
+      "target": "notification-service",
+      "protocol": "http",
+      "mode": "sync"
+    },
+    {
+      "source": "auth-service",
+      "target": "token-refresh",
+      "protocol": "grpc+mtls",
+      "mode": "sync"
+    },
+    {
+      "source": "auth-service",
+      "target": "user-db",
+      "protocol": "postgres",
+      "mode": "sync"
+    },
+    {
+      "source": "token-refresh",
+      "target": "user-db",
+      "protocol": "postgres",
+      "mode": "sync"
+    },
+    {
+      "source": "payment-service",
+      "target": "auth-service",
+      "protocol": "http",
+      "mode": "sync"
+    },
+    {
+      "source": "payment-service",
+      "target": "user-db",
+      "protocol": "postgres",
+      "mode": "sync"
+    },
+    {
+      "source": "payment-service",
+      "target": "notification-service",
+      "protocol": "http",
+      "mode": "sync"
+    },
+    {
+      "source": "notification-service",
+      "target": "user-db",
+      "protocol": "postgres",
+      "mode": "sync"
+    }
+  ]
+}
