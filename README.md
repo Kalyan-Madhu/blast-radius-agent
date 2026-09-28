@@ -28,7 +28,7 @@ Once the incident is resolved, the agent **retains** the outcome back into its m
 ## 🔄 The Recall-Reason-Retain Workflow
 
 * **1. Recall:** Automatically queries Hindsight vector memory banks to surface relevant historical context and past incident IDs based on incoming error logs.
-* **2. Reason:** Passes the log and recalled organizational history into Groq (`llama-3.3-70b-versatile`) to generate precise root causes, blast radiuses, and runbook actions.
+* **2. Reason:** Passes the log and recalled organizational history into Groq using the **`openai/gpt-oss-20b`** model to generate precise root causes, blast radiuses, and runbook actions.
 * **3. Retain:** Writes confirmed resolutions and cascading propagation patterns back into Hindsight for future recall.
 
 ---
@@ -36,7 +36,7 @@ Once the incident is resolved, the agent **retains** the outcome back into its m
 ## ✨ Key Features
 
 * **Dual-Panel Contrast View:** Side-by-side UI comparing a memory-less baseline against a Hindsight-grounded expert response.
-* **Ultra-Low Latency Inference:** Leverages Groq's high-speed hardware for instantaneous root-cause analysis during high-stress outages.
+* **Ultra-Low Latency Inference:** Leverages Groq's high-speed hardware (`openai/gpt-oss-20b`) for instantaneous root-cause analysis during high-stress outages.
 * **Propagation Cascade Mapping:** Predicts downstream service failures before dependent microservices crash.
 
 ---
@@ -45,7 +45,7 @@ Once the incident is resolved, the agent **retains** the outcome back into its m
 
 * **Core Logic:** Python, OpenAI-compatible SDK
 * **Memory Layer:** Hindsight (by Vectorize)
-* **LLM Inference:** Groq (`llama-3.3-70b-versatile`)
+* **LLM Inference:** Groq (`openai/gpt-oss-20b`)
 * **Frontend UI:** Streamlit
 
 ---
