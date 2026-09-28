@@ -17,7 +17,7 @@ HINDSIGHT_API_KEY = os.environ["HINDSIGHT_API_KEY"].strip()
 GROQ_API_KEY = os.environ["GROQ_API_KEY"].strip()
 
 # Recommended fast, free-tier model on Groq
-AGENT_MODEL = os.getenv("AGENT_MODEL", "llama-3.3-70b-versatile").strip()
+AGENT_MODEL = os.getenv("AGENT_MODEL", "openai/gpt-oss-20b").strip()
 
 # Optional: override to point at a self-hosted Hindsight server.
 HINDSIGHT_BASE_URL = (os.getenv("HINDSIGHT_BASE_URL") or "https://api.hindsight.vectorize.io").strip().rstrip("/")
