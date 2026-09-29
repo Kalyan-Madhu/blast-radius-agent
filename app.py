@@ -143,11 +143,17 @@ saved = st.session_state.setdefault("saved", set())
 # ─── Sidebar: ROI assumptions ─────────────────────────────────────────────────
 with st.sidebar:
     st.header("ROI assumptions")
-    cost_per_min = st.number_input("Downtime cost ($ / minute)", min_value=0, value=5600, step=100,
-                                   help="Industry benchmark often cited from Gartner: ~$5,600/min. Replace with your own.")
-    mttr_baseline = st.number_input("MTTR, generic troubleshooting (min)", min_value=1, value=90, step=5)
+    st.caption("Downtime cost is priced at the most critical service in the blast radius (criticality from topology.json).")
+    tier_cost = {
+        "tier-0": st.number_input("Tier-0 downtime ($ / min)", min_value=0, value=10000, step=500),
+        "tier-1": st.number_input("Tier-1 downtime ($ / min)", min_value=0, value=5000, step=500),
+        "tier-2": st.number_input("Tier-2 downtime ($ / min)", min_value=0, value=1000, step=100),
+    }
+    triage_base = st.number_input("Generic triage, base (min)", min_value=0, value=30, step=5)
+    triage_per_service = st.number_input("Generic triage, per impacted service (min)", min_value=0, value=15, step=5,
+                                         help="Each extra hop in the cascade adds dependency-chasing time without a runbook.")
     mttr_memory = st.number_input("MTTR, with a recalled runbook (min)", min_value=1, value=25, step=5)
-    st.caption("Savings are only credited when Hindsight recalls a matching past postmortem.")
+    st.caption("Savings are only credited when Hindsight recalls a relevant past postmortem.")
 
 # ─── Header ───────────────────────────────────────────────────────────────────
 st.markdown('<div class="brand"><h1>🚨 Blast Radius</h1><span class="env">Incident Command · prod</span></div>'
@@ -209,17 +215,29 @@ if not result:
 
 base, mem = result["baseline"], result["hindsight"]
 memories = mem["memories"]
-# ponytail: "matched" = the answer cites a past incident id; swap for a recall relevance score if Hindsight exposes one.
-cited = sorted(set(re.findall(r"INC-\d{4}-\d{4}-\d{3}", mem["text"])) - {inc_id})
-matched = bool(cited) and not mem["error"]
-saved_usd = (mttr_baseline - mttr_memory) * cost_per_min if matched else 0
+# recall_memory already drops low-relevance hits, so any recall left is a real match.
+matched = bool(memories) and not mem["error"]
+recalled_ids = list(dict.fromkeys(
+    (m.get("metadata") or {}).get("incident_id") or m.get("document_id") for m in memories))
+past_ids = [i for i in recalled_ids if i and i != inc_id]
+via = past_ids[0] if past_ids else f"{len(memories)} recalled memories"
+
+# Impacted = alerting service + agent-predicted at-risk services; fall back to the recorded cascade if none parsed.
+impacted = [*failing, *predicted] if predicted else incident["cascade_pattern"]["path"]
+top_tier = min(graph.nodes[s].get("criticality", "tier-2") for s in impacted if s in graph)  # "tier-0" sorts first
+cost_per_min = tier_cost.get(top_tier, tier_cost["tier-2"])
+mttr_baseline = triage_base + triage_per_service * len(impacted)
+minutes_saved = max(mttr_baseline - mttr_memory, 0)
+saved_usd = minutes_saved * cost_per_min if matched else 0
 
 # ─── Impact ───────────────────────────────────────────────────────────────────
 section("Impact")
 k1, k2, k3 = st.columns(3)
 k1.metric("Downtime cost saved", f"${saved_usd:,.0f}",
-          delta=f"{mttr_baseline - mttr_memory} min faster via {cited[0]}" if matched else "no matching memory",
-          delta_color="normal" if matched else "off")
+          delta=f"{minutes_saved} min faster via {via}" if matched else "no matching memory",
+          delta_color="normal" if matched else "off",
+          help=f"({mttr_baseline} min generic MTTR − {mttr_memory} min with runbook) × ${cost_per_min:,}/min "
+               f"({top_tier}, {len(impacted)} impacted services)")
 k2.metric("Past postmortems recalled", len(memories))
 k3.metric("Predicted blast radius", f"{len(predicted)} services" if predicted else "n/a")
 
@@ -261,10 +279,9 @@ else:
     r1, r2 = st.columns(2, gap="medium")
     root_cause = r1.text_area("Confirmed root cause", mem["root_cause"], height=130)
     runbook = r2.text_area("Fix that resolved it", mem["runbook_action"], height=130)
-    cascade = [*failing, *predicted] if predicted else incident["cascade_pattern"]["path"]
     if st.button("💾 Save resolution to Hindsight", width="stretch", disabled=not root_cause.strip()):
         with st.spinner("Retaining postmortem in Hindsight…"):
-            ok = save_resolution(inc_id, incident["raw_log"], root_cause, cascade, runbook_fix=runbook)
+            ok = save_resolution(inc_id, incident["raw_log"], root_cause, impacted, runbook_fix=runbook)
         if ok:
             saved.add(inc_id)
             st.rerun()

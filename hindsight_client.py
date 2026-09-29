@@ -17,14 +17,25 @@ BANK_ID = "sre-blast-radius"
 # (connect, read) seconds. Retain runs LLM fact extraction server-side, so reads can be slow.
 TIMEOUT = (5, 90)
 
+# Recall rejects queries over 500 tokens with HTTP 400. Raw logs run ~2.6 chars/token, so 1000 chars stays under.
+# ponytail: char-based cut, not a tokenizer; if a dense log still 400s, lower this.
+MAX_QUERY_CHARS = 1000
+
+# Recall ranks ~100 facts by scores.final and always returns them; scores.reranker sits ~0.99 even for unrelated hits.
+# scores.semantic separates: same-incident hits score ~0.75-0.9; off-topic queries (e.g. an Elasticsearch disk-full log) get none.
+# ponytail: fixed cut calibrated on 15 demo incidents; re-check as the bank grows.
+MIN_SEMANTIC_SCORE = 0.75
+
 _session = requests.Session()
 _session.headers.update({"Authorization": f"Bearer {HINDSIGHT_API_KEY}"})
 
 
 def _post(path, body):
     url = f"{HINDSIGHT_BASE_URL}{path}"
+    log.debug("Hindsight POST %s payload=%s", url, body)
     try:
         resp = _session.post(url, json=body, timeout=TIMEOUT)
+        log.debug("Hindsight %s response=%s", resp.status_code, resp.text[:2000])
         resp.raise_for_status()
         return resp.json()
     except requests.Timeout:
@@ -62,7 +73,11 @@ def recall_memory(bank_id, query_log, max_results=5):
     """Return up to max_results past memories that best match query_log (a raw error log).
 
     Each result is a dict with at least 'text', plus 'metadata' and 'document_id'
-    when they were set at retain time. Returns [] if Hindsight is unavailable.
+    when they were set at retain time. Only results with a semantic score >= MIN_SEMANTIC_SCORE are kept.
+    Returns [] if nothing is relevant or Hindsight is unavailable.
     """
-    data = _post(f"{_bank_path(bank_id)}/recall", {"query": query_log, "budget": "mid"})
-    return (data or {}).get("results", [])[:max_results]
+    # Head of the log carries the alert line and top of the stack trace, which is what matches past postmortems.
+    data = _post(f"{_bank_path(bank_id)}/recall", {"query": query_log[:MAX_QUERY_CHARS], "budget": "mid"})
+    results = (data or {}).get("results", [])
+    relevant = [r for r in results if ((r.get("scores") or {}).get("semantic") or 0) >= MIN_SEMANTIC_SCORE]
+    return relevant[:max_results]

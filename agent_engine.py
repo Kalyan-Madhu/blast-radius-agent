@@ -8,6 +8,7 @@ import re
 import time
 from concurrent.futures import ThreadPoolExecutor
 
+import openai
 from openai import OpenAI
 
 import hindsight_client
@@ -54,14 +55,14 @@ def _ask(system, user):
                 {"role": "user", "content": user}
             ],
         )
+    except openai.AuthenticationError:
+        return "", "Groq rejected the API key. Set GROQ_API_KEY correctly in your .env file."
+    except openai.NotFoundError:
+        return "", f"Model '{AGENT_MODEL}' not found on Groq. Set AGENT_MODEL in .env to a valid model id."
+    except openai.RateLimitError as exc:
+        return "", f"Groq rate limit hit for '{AGENT_MODEL}'; wait a minute and retry. ({exc})"
     except Exception as exc:
-        err_msg = str(exc)
-        if "authentication" in err_msg.lower() or "api key" in err_msg.lower():
-            return "", "Groq rejected the API key. Set GROQ_API_KEY correctly in your .env file."
-        elif "model" in err_msg.lower() or "not found" in err_msg.lower():
-            return "", f"Model '{AGENT_MODEL}' not found on Groq. Set AGENT_MODEL in .env to a valid model id."
-        else:
-            return "", f"Groq LLM call failed: {err_msg}"
+        return "", f"Groq LLM call failed: {exc}"
 
     choice = response.choices[0]
     if getattr(choice, "finish_reason", None) == "content_filter":
