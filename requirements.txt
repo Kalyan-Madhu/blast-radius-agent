@@ -1,6 +1,7 @@
-streamlit
-anthropic
-requests
-python-dotenv
-networkx
-pyvis
+# Minimums are the versions this app was last tested with.
+streamlit>=1.56.0
+openai>=3.20.0
+requests>=2.33.1
+python-dotenv>=1.2.3
+networkx>=3.7
+pyvis>=0.3.2
