@@ -97,6 +97,7 @@ def _baseline(incoming_log):
 def _with_memory(incoming_log):
     start = time.perf_counter()
     memories = hindsight_client.recall_memory(hindsight_client.BANK_ID, incoming_log)  # Recall
+    recall_s = round(time.perf_counter() - start, 2)
     prompt = (
         f"<past_postmortems>\n{_format_memories(memories)}\n</past_postmortems>\n\n"
         f"<log>\n{incoming_log}\n</log>"
@@ -106,6 +107,7 @@ def _with_memory(incoming_log):
         **_parse_sections(text),
         "text": text,
         "memories": memories,
+        "recall_s": recall_s,
         "error": error,
         "latency_s": round(time.perf_counter() - start, 2),
     }
@@ -115,7 +117,7 @@ def analyze_incident(incoming_log):
     """Run the baseline and Hindsight evaluations in parallel.
 
     Returns {"baseline": {text, error, latency_s},
-             "hindsight": {root_cause, blast_radius, runbook_action, text, memories, error, latency_s}}.
+             "hindsight": {root_cause, blast_radius, runbook_action, text, memories, recall_s, error, latency_s}}.
     """
     with ThreadPoolExecutor(max_workers=2) as pool:
         baseline = pool.submit(_baseline, incoming_log)
